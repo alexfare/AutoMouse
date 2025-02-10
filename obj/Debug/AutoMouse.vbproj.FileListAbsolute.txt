@@ -1,0 +1,16 @@
+D:\Visual Studio\AutoMouse\AutoMouse\bin\Debug\AutoMouse.exe.config
+D:\Visual Studio\AutoMouse\AutoMouse\bin\Debug\AutoMouse.exe
+D:\Visual Studio\AutoMouse\AutoMouse\bin\Debug\AutoMouse.pdb
+D:\Visual Studio\AutoMouse\AutoMouse\bin\Debug\AutoMouse.xml
+D:\Visual Studio\AutoMouse\AutoMouse\obj\Debug\AutoMouse.vbproj.AssemblyReference.cache
+D:\Visual Studio\AutoMouse\AutoMouse\obj\Debug\AutoMouse.Resources.resources
+D:\Visual Studio\AutoMouse\AutoMouse\obj\Debug\AutoMouse.vbproj.GenerateResource.cache
+D:\Visual Studio\AutoMouse\AutoMouse\obj\Debug\AutoMouse.vbproj.CoreCompileInputs.cache
+D:\Visual Studio\AutoMouse\AutoMouse\obj\Debug\AutoMouse.exe
+D:\Visual Studio\AutoMouse\AutoMouse\obj\Debug\AutoMouse.xml
+D:\Visual Studio\AutoMouse\AutoMouse\obj\Debug\AutoMouse.pdb
+D:\Visual Studio\AutoMouse\AutoMouse\bin\Debug\AutoMouse.exe.manifest
+D:\Visual Studio\AutoMouse\AutoMouse\bin\Debug\AutoMouse.application
+D:\Visual Studio\AutoMouse\AutoMouse\obj\Debug\AutoMouse.exe.manifest
+D:\Visual Studio\AutoMouse\AutoMouse\obj\Debug\AutoMouse.application
+D:\Visual Studio\AutoMouse\AutoMouse\obj\Debug\AutoMouse.Main.resources
