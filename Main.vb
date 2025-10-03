@@ -71,29 +71,48 @@ Public Class Main
     Private playing As Boolean = False
     Private recordedActions As New List(Of MouseAction)()
     Private lastRecordedTime As Integer
+    Private lastRecordedPosition As Point = Point.Empty
 
     Private Sub btnRecord_Click(sender As Object, e As EventArgs) Handles btnRecord.Click
-        lblCountdown.Text = "Recording Starting in: 3"
-        lblCountdown.Refresh()
-        Thread.Sleep(1000)
+        If recording Then
+            MessageBox.Show("Recording is already in progress.", "AutoMouse", MessageBoxButtons.OK, MessageBoxIcon.Information)
+            Return
+        End If
 
-        lblCountdown.Text = "Recording Starting in: 2"
-        lblCountdown.Refresh()
-        Thread.Sleep(1000)
+        If playing Then
+            MessageBox.Show("Stop playback before starting a new recording.", "AutoMouse", MessageBoxButtons.OK, MessageBoxIcon.Information)
+            Return
+        End If
 
-        lblCountdown.Text = "Recording Starting in: 1"
-        lblCountdown.Refresh()
-        Thread.Sleep(1000)
+        recording = True
+
+        For countdown As Integer = 3 To 1 Step -1
+            lblCountdown.Text = $"Recording Starting in: {countdown}"
+            lblCountdown.Refresh()
+            Thread.Sleep(1000)
+
+            If Not recording Then
+                lblCountdown.Text = ""
+                Return
+            End If
+        Next
 
         lblCountdown.Text = "Go!"
         lblCountdown.Refresh()
         Thread.Sleep(500)
 
+        If Not recording Then
+            lblCountdown.Text = ""
+            Return
+        End If
+
         lblCountdown.Text = ""
 
-        recording = True
-        recordedActions.Clear()
+        SyncLock recordedActions
+            recordedActions.Clear()
+        End SyncLock
         lastRecordedTime = Environment.TickCount
+        lastRecordedPosition = Point.Empty
         lstRecordedActions.Items.Clear()
 
         Dim recordThread As New Thread(AddressOf RecordMouse)
@@ -116,41 +135,59 @@ Public Class Main
             Dim leftState As Boolean = (GetAsyncKeyState(VK_LBUTTON) <> 0)
             Dim rightState As Boolean = (GetAsyncKeyState(VK_RBUTTON) <> 0)
 
-            ' Record movement
-            Dim action As New MouseAction With {
-                .X = cursorPos.X,
-                .Y = cursorPos.Y,
-                .ClickType = "Move",
-                .Delay = Environment.TickCount - lastRecordedTime
-            }
-            lastRecordedTime = Environment.TickCount
-            recordedActions.Add(action)
+            Dim currentTick As Integer = Environment.TickCount
+            Dim elapsedSinceLast As Integer = Math.Max(0, currentTick - lastRecordedTime)
+            Dim actionsToAdd As New List(Of MouseAction)()
+            Dim pendingDelay As Integer = elapsedSinceLast
 
-            ' Record left click
+            If lastRecordedPosition.IsEmpty OrElse lastRecordedPosition <> cursorPos Then
+                actionsToAdd.Add(New MouseAction With {
+                    .X = cursorPos.X,
+                    .Y = cursorPos.Y,
+                    .ClickType = "Move",
+                    .Delay = pendingDelay
+                })
+                pendingDelay = 0
+                lastRecordedPosition = cursorPos
+            End If
+
             If leftState AndAlso Not lastLeftState Then
-                recordedActions.Add(New MouseAction With {
+                actionsToAdd.Add(New MouseAction With {
                     .X = cursorPos.X,
                     .Y = cursorPos.Y,
                     .ClickType = "LeftClick",
-                    .Delay = 0
+                    .Delay = pendingDelay
                 })
+                pendingDelay = 0
             End If
 
-            ' Record right click
             If rightState AndAlso Not lastRightState Then
-                recordedActions.Add(New MouseAction With {
+                actionsToAdd.Add(New MouseAction With {
                     .X = cursorPos.X,
                     .Y = cursorPos.Y,
                     .ClickType = "RightClick",
-                    .Delay = 0
+                    .Delay = pendingDelay
                 })
+                pendingDelay = 0
+            End If
+
+            If actionsToAdd.Count > 0 Then
+                lastRecordedTime = currentTick
+                SyncLock recordedActions
+                    recordedActions.AddRange(actionsToAdd)
+                End SyncLock
+
+                If Not Me.IsDisposed AndAlso Me.IsHandleCreated Then
+                    Me.BeginInvoke(Sub()
+                                        For Each action In actionsToAdd
+                                            lstRecordedActions.Items.Add(action.ToString())
+                                        Next
+                                    End Sub)
+                End If
             End If
 
             lastLeftState = leftState
             lastRightState = rightState
-
-            ' Update UI list
-            Me.Invoke(Sub() lstRecordedActions.Items.Add(action.ToString()))
 
             Thread.Sleep(10)
         End While
@@ -158,6 +195,16 @@ Public Class Main
 
     ' Start Playback
     Private Sub btnPlay_Click(sender As Object, e As EventArgs) Handles btnPlay.Click
+        Dim hasActions As Boolean
+        SyncLock recordedActions
+            hasActions = recordedActions.Count > 0
+        End SyncLock
+
+        If Not hasActions Then
+            MessageBox.Show("There are no recorded actions to play back.", "AutoMouse", MessageBoxButtons.OK, MessageBoxIcon.Information)
+            Return
+        End If
+
         playing = True
         Dim playbackThread As New Thread(AddressOf PlayMouse)
         playbackThread.IsBackground = True
@@ -171,39 +218,49 @@ Public Class Main
 
     ' Play Back Recorded Mouse Movements and Clicks
     Private Sub PlayMouse()
+        Dim inputBlocked As Boolean = False
         If chkBlockInput.Checked Then
-            BlockInput(True) ' Block input
+            inputBlocked = BlockInput(True)
         End If
 
         Try
-            While playing
-                ' Create a copy of recordedActions to prevent modification during playback
-                Dim actionsToPlay As List(Of MouseAction) = Nothing
-                SyncLock recordedActions
-                    actionsToPlay = New List(Of MouseAction)(recordedActions)
-                End SyncLock
+            Dim actionsToPlay As New List(Of MouseAction)()
+            SyncLock recordedActions
+                For Each action In recordedActions
+                    actionsToPlay.Add(New MouseAction With {
+                        .X = action.X,
+                        .Y = action.Y,
+                        .ClickType = action.ClickType,
+                        .Delay = action.Delay
+                    })
+                Next
+            End SyncLock
 
-                ' Loop through the copied list
-                For Each action As MouseAction In actionsToPlay
-                    If Not playing Then Exit For
+            For Each action As MouseAction In actionsToPlay
+                If Not playing Then Exit For
 
-                    Thread.Sleep(action.Delay)
+                Dim delay As Integer = Math.Max(0, action.Delay)
+                If delay > 0 Then
+                    Thread.Sleep(delay)
+                End If
 
-                    ' Move Mouse
-                    Cursor.Position = New Point(action.X, action.Y)
+                Cursor.Position = New Point(action.X, action.Y)
 
-                    ' Simulate Clicks
-                    If action.ClickType = "LeftClick" Then
+                Select Case action.ClickType
+                    Case "LeftClick"
                         mouse_event(MOUSEEVENTF_LEFTDOWN, 0, 0, 0, IntPtr.Zero)
                         mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, IntPtr.Zero)
-                    ElseIf action.ClickType = "RightClick" Then
+                    Case "RightClick"
                         mouse_event(MOUSEEVENTF_RIGHTDOWN, 0, 0, 0, IntPtr.Zero)
                         mouse_event(MOUSEEVENTF_RIGHTUP, 0, 0, 0, IntPtr.Zero)
-                    End If
-                Next
-            End While
+                End Select
+            Next
         Finally
-            BlockInput(False) ' Unblock input when stopping
+            playing = False
+
+            If inputBlocked Then
+                BlockInput(False)
+            End If
         End Try
     End Sub
 
@@ -216,6 +273,8 @@ Public Class Main
     End Sub
 
     Private Sub Form1_FormClosing(sender As Object, e As FormClosingEventArgs) Handles MyBase.FormClosing
+        recording = False
+        playing = False
         UnregisterHotKey(Me.Handle, HOTKEY_ID)
     End Sub
 End Class
